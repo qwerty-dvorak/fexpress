@@ -1,46 +1,47 @@
 export const runtime = 'edge'
+import { Redis } from '@upstash/redis'
 
-export async function GET() {
-  const message = "Hello from Edge Stream!";
-  let index = 0;
-  let isFirstCharSent = false;
-  const encoder = new TextEncoder();
+const REDIS_KEY = 'my-key'
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const value = searchParams.get('value')
+  
+  const redis = Redis.fromEnv()
+  const encoder = new TextEncoder()
 
   const stream = new ReadableStream({
-    start(controller) {
-      const interval = setInterval(() => {
-        if (index >= message.length) {
-          clearInterval(interval);
-          controller.close();
-          return;
+    async start(controller) {
+      try {
+        console.log('Starting stream write')
+        controller.enqueue(encoder.encode('searching...\n'))
+        
+        const items = await redis.lrange(REDIS_KEY, 0, -1)
+        console.log('Found items:', items)
+        
+        for (const item of items) {
+          console.log('Writing item:', item)
+          controller.enqueue(encoder.encode(`found: ${item}\n`))
+          // Add small delay to prevent stream flooding
+          await new Promise(resolve => setTimeout(resolve, 1000))
         }
 
-        if (!isFirstCharSent) {
-          controller.enqueue(encoder.encode(message[index]));
-          index++;
-          isFirstCharSent = true;
-          setTimeout(() => {
-            // Resume after 6 seconds
-            const remainingInterval = setInterval(() => {
-              if (index >= message.length) {
-                clearInterval(remainingInterval);
-                controller.close();
-                return;
-              }
-              controller.enqueue(encoder.encode(message[index]));
-              index++;
-            }, 1000);
-          }, 6000);
-          clearInterval(interval);
-        }
-      }, 1000);
-    },
+        controller.enqueue(encoder.encode('search done\n'))
+      } catch (error) {
+        console.error('Stream error:', error)
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        controller.enqueue(encoder.encode(`error: ${errorMessage}\n`))
+      } finally {
+        controller.close()
+      }
+    }
   });
 
   return new Response(stream, {
     headers: {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Cache-Control': 'no-cache',
-    },
-  });
+      'content-type': 'text/plain; charset=utf-8',
+      'cache-control': 'no-cache',
+      'connection': 'keep-alive'
+    }
+  })
 }
