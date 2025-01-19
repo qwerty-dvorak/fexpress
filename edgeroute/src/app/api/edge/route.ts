@@ -4,6 +4,7 @@ export async function GET() {
   const message = "Hello from Edge Stream!";
   let index = 0;
   let isFirstCharSent = false;
+  const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
     start(controller) {
@@ -15,7 +16,7 @@ export async function GET() {
         }
 
         if (!isFirstCharSent) {
-          controller.enqueue(message[index]);
+          controller.enqueue(encoder.encode(message[index]));
           index++;
           isFirstCharSent = true;
           setTimeout(() => {
@@ -26,7 +27,7 @@ export async function GET() {
                 controller.close();
                 return;
               }
-              controller.enqueue(message[index]);
+              controller.enqueue(encoder.encode(message[index]));
               index++;
             }, 1000);
           }, 6000);
@@ -40,7 +41,6 @@ export async function GET() {
     headers: {
       'Content-Type': 'text/plain; charset=utf-8',
       'Cache-Control': 'no-cache',
-      'Transfer-Encoding': 'chunked',
     },
   });
 }
