@@ -1,25 +1,46 @@
 export const runtime = 'edge'
 
 export async function GET() {
-  const { readable, writable } = new TransformStream()
-  const writer = writable.getWriter()
-  const encoder = new TextEncoder()
+  const message = "Hello from Edge Stream!";
+  let index = 0;
+  let isFirstCharSent = false;
 
-  // Example: Write chunks with delays
-  const message = "Hello, world."
-  let isFirst = true
-  for (const chunk of encoder.encode(message)) {
-    await writer.ready
-    if (!isFirst) {
-      await new Promise(resolve => setTimeout(resolve, 500)) 
-    }
-    await writer.write(chunk)
-    isFirst = false
-  }
-  await writer.ready
-  await writer.close()
+  const stream = new ReadableStream({
+    start(controller) {
+      const interval = setInterval(() => {
+        if (index >= message.length) {
+          clearInterval(interval);
+          controller.close();
+          return;
+        }
 
-  return new Response(readable, {
-    headers: { 'content-type': 'text/plain' }
-  })
+        if (!isFirstCharSent) {
+          controller.enqueue(message[index]);
+          index++;
+          isFirstCharSent = true;
+          setTimeout(() => {
+            // Resume after 6 seconds
+            const remainingInterval = setInterval(() => {
+              if (index >= message.length) {
+                clearInterval(remainingInterval);
+                controller.close();
+                return;
+              }
+              controller.enqueue(message[index]);
+              index++;
+            }, 1000);
+          }, 6000);
+          clearInterval(interval);
+        }
+      }, 1000);
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-cache',
+      'Transfer-Encoding': 'chunked',
+    },
+  });
 }

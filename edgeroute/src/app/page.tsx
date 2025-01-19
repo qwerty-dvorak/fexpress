@@ -1,27 +1,37 @@
-'use client'
+'use client';
 
-export default function Home() {
-  async function handleClick() {
-    const response = await fetch('/api/edge')
-    const reader = response.body?.getReader()
-    const decoder = new TextDecoder()
+import React, { useState, useEffect } from 'react';
 
-    if (!reader) return
+const StreamPage = () => {
+  const [message, setMessage] = useState("");
 
-    let result = ''
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      const decoded = decoder.decode(value, { stream: true })
-      result += decoded
-      console.log('Chunk received:', decoded)
+  useEffect(() => {
+    async function fetchStream() {
+      const response = await fetch('/api/edge');
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let result = "";
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          result += decoder.decode(value);
+          setMessage(result);
+        }
+      }
     }
-    console.log('[MESSAGE RECEIVED]', result)
-  }
+    fetchStream();
+  }, []);
 
   return (
-    <main>
-      <button type="button" onClick={handleClick}>Start Stream</button>
-    </main>
-  )
-}
+    <div className="flex items-center justify-center min-h-screen bg-gray-100">
+      <div className="text-center p-4 bg-white shadow-lg rounded-lg">
+        <h1 className="text-xl font-semibold mb-4">Streaming Message:</h1>
+        <div className="text-lg font-mono">{message}</div>
+      </div>
+    </div>
+  );
+};
+
+export default StreamPage;
